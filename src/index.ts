@@ -5,6 +5,8 @@ import {
   addSoundboard,
   addTrack,
   KenkuRemoteConfig,
+  listPlaylists,
+  listSoundboards,
   removePlaylist,
   removeSound,
   removeSoundboard,
@@ -21,7 +23,7 @@ const argv = yargs(hideBin(process.argv)).argv
  * ts-node src/index.ts --rootDir [path to root directory]
  *
  * Options:
- *      --backfill: will re-send all playlists/soundboards at start-up.
+ *      --backfill: will delete existing playlists/soundboards and re-send all playlists/soundboards at start-up.
  *      --host [host]: the host for Kenku remote. Defaults to 127.0.0.1.
  *      --port [port]: the port for Kenku remote. Defaults to 3333.
  *      --playlistsDir [dir]: the directory (under the root directory) containing playlists. Defaults to "Playlists".
@@ -45,7 +47,9 @@ const folderRegex = '[a-zA-Z0-9 -]+'
 const fileRegex = '[a-zA-Z0-9 -\\.]+'
 
 let ACTIVATED = false
-const JOB_FREQUENCY = 250
+const JOB_FREQUENCY = 500
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(() => resolve({}), ms))
 
 const validateDirectory = (directories: DirectoriesConfig, path: string) => {
   const match = path.match(
@@ -66,7 +70,10 @@ const validateFile = (directories: DirectoriesConfig, path: string) => {
 }
 
 const removeFileType = (fileName: string) => {
-  return fileName.slice(0, fileName.indexOf('.'))
+  const clean = fileName.includes('.')
+    ? fileName.trim().slice(0, fileName.indexOf('.'))
+    : fileName.trim()
+  return !clean.trim().length ? 'UnknownTitle' : clean
 }
 
 const prepareFilePath = (path: string) => `file://${encodeURI(path)}`
@@ -162,6 +169,25 @@ const handleQueue = (directories: DirectoriesConfig, kenkuConfig: KenkuRemoteCon
   }
 }
 
+const purge = async (kenkuConfig: KenkuRemoteConfig) => {
+  const playlists = await listPlaylists(kenkuConfig)
+  const soundboards = await listSoundboards(kenkuConfig)
+  if (playlists.playlists.length) {
+    console.log('Deleting playlists')
+    for (const playlist of playlists.playlists) {
+      await removePlaylist(kenkuConfig, { url: playlist.url })
+      await delay(500)
+    }
+  }
+  if (soundboards.soundboards.length) {
+    console.log('Deleting soundboards')
+    for (const soundboard of soundboards.soundboards) {
+      await removeSoundboard(kenkuConfig, { url: soundboard.url })
+      await delay(500)
+    }
+  }
+}
+
 const watch = (
   backfill: boolean,
   directories: DirectoriesConfig,
@@ -194,15 +220,54 @@ const watch = (
     })
 }
 
-watch(
-  argv.backfill,
-  {
-    root: argv.rootDir,
-    playlists: argv.playlistsDir,
-    soundboards: argv.soundboardsDir,
-  },
-  {
+const driver = async () => {
+  const kenkuConfig: KenkuRemoteConfig = {
     host: argv.host || DEFAULT_KENKU_CONFIG.host,
     port: argv.port || DEFAULT_KENKU_CONFIG.port,
   }
-)
+
+  if (!argv.action || !['purge', 'backfill', 'watch', 'view'].includes(argv.action)) {
+    throw Error(`Invalid action: ${argv.action}`)
+  }
+
+  switch (argv.action) {
+    case 'view':
+      const playlists = await listPlaylists(kenkuConfig)
+      const soundboards = await listSoundboards(kenkuConfig)
+      console.log(JSON.stringify({ playlists, soundboards }, null, 2))
+      return
+    case 'purge':
+      await purge(kenkuConfig)
+      return
+    case 'backfill':
+      if (!argv.rootDir) {
+        throw Error('Missing rootDir!')
+      }
+      watch(
+        true,
+        {
+          root: argv.rootDir,
+          playlists: argv.playlistsDir,
+          soundboards: argv.soundboardsDir,
+        },
+        kenkuConfig
+      )
+      return
+    case 'watch':
+      if (!argv.rootDir) {
+        throw Error('Missing rootDir!')
+      }
+      watch(
+        false,
+        {
+          root: argv.rootDir,
+          playlists: argv.playlistsDir,
+          soundboards: argv.soundboardsDir,
+        },
+        kenkuConfig
+      )
+      return
+  }
+}
+
+driver().catch(console.log)

@@ -9,6 +9,32 @@ export interface KenkuRemoteConfig {
   port: string
 }
 
+export interface Playlist {
+  id: string
+  title: string
+  background: string
+  tracks: string[]
+  url: string
+}
+
+export interface ListPlaylistsResponse {
+  playlists: Playlist[]
+  tracks: any[]
+}
+
+export interface Soundboard {
+  id: string
+  sounds: string[]
+  background: string
+  title: string
+  url: string
+}
+
+export interface ListSoundboardsResponse {
+  soundboards: Soundboard[]
+  sounds: any[]
+}
+
 export const callKenku = async (
   config: KenkuRemoteConfig,
   req: {
@@ -36,6 +62,16 @@ export const callKenku = async (
     console.log(JSON.stringify(data, null, 2))
   }
   return data
+}
+
+export const listPlaylists = async (config: KenkuRemoteConfig): Promise<ListPlaylistsResponse> => {
+  return callKenku(config, { path: 'playlist', method: 'get' })
+}
+
+export const listSoundboards = async (
+  config: KenkuRemoteConfig
+): Promise<ListSoundboardsResponse> => {
+  return callKenku(config, { path: 'soundboard', method: 'get' })
 }
 
 export const addPlaylist = async (
