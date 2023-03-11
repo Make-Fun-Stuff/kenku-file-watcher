@@ -105,8 +105,8 @@ const handleQueue = (directories: DirectoriesConfig, kenkuConfig: KenkuRemoteCon
               title: removeFileType(fileToAdd),
               url: cleanUrl(prepareFilePath(path)),
               soundboardUrl: cleanUrl(path.replace(fileToAdd, '')),
-              fadeIn: 500,
-              fadeOut: 500,
+              fadeIn: 4000,
+              fadeOut: 4000,
               loop: true,
               volume: 100,
             }).catch(console.log)
